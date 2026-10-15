@@ -14,7 +14,8 @@
     "INSIGHTFACE_MODELS_DIR": "/home/vscode/.insightface/server-models"
   },
   "mounts": [
-    "source=${devcontainerId}-insightface-cache,target=/home/vscode/.insightface,type=volume"
+    "source=${devcontainerId}-insightface-cache,target=/home/vscode/.insightface,type=volume",
+    "source=/home/${localEnv:USER}${localEnv:USERPROFILE}/.ssh,target=/home/vscode/.ssh,type=bind" 
   ],
   "postCreateCommand": "bash .devcontainer/post-create.sh",
   "forwardPorts": [8080],
