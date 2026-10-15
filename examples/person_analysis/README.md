@@ -16,6 +16,10 @@ Replace the example filenames with your own images and videos:
 # One image. Without --reference, detections are returned as unmatched.
 python examples/person_analysis/demo.py --image scene.jpg --reference "Alice=alice.jpg"
 
+# Save every aligned 112x112 face crop used to produce an embedding as a BMP.
+python examples/person_analysis/demo.py --image scene.jpg --reference "Alice=alice.jpg" \
+  --aligned-output-dir aligned_faces
+
 # Local video with boxes. Omit --display when running without a desktop.
 python examples/person_analysis/demo.py --video clip.mp4 --reference "Alice=alice.jpg" --display
 
@@ -34,7 +38,10 @@ to limit processing to 20 frames. Press Q or Esc to stop the preview, or Ctrl+C
 in the terminal. Both scripts default to `cheetah_s` on CPU. Add
 `--model cheetah_l` to use the larger package. Add `--gpu` only after installing
 the GPU runtime and configuring CUDA as described in the guide. `demo.py` also
-accepts `--root` to choose a different model directory.
+accepts `--root` to choose a different model directory. Pass
+`--aligned-output-dir DIRECTORY` to save every face crop that produced an
+embedding. Files are named `frame_XXXXXX_face_XXX.bmp`; the frame number also
+keeps video output distinct.
 
 OpenCV reads frames sequentially. This example does not manage stream reconnects,
 guarantee frame dropping or maintain history. OpenCV text drawing has limited
@@ -60,3 +67,18 @@ square face input. The package and feature extraction models stay unchanged.
 The chosen face size applies to both reference registration and scene analysis.
 See the [body input-size guide](../../python-package/docs/person_analysis.md#body-detection-input-size)
 and [face input-size guide](../../python-package/docs/person_analysis.md#face-detection-input-size).
+
+
+
+
+```bash
+. /opt/insightface-venv/bin/activate
+
+pip install "onnxruntime-gpu[cuda,cudnn]" numpy matplotlib Pillow opencv-python scikit-learn scipy insightface
+
+sudo apt-get update
+sudo apt-get install -y libxcb-xinerama0 libqt5gui5 libx11-xcb1 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xfixes0
+
+python examples/person_analysis/demo.py --video BigBang_SA3cNnkTRlo.mp4 --gpu --display
+
+```

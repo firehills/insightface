@@ -4,6 +4,10 @@
     "dockerfile": "Dockerfile",
     "context": "."
   },
+  "runArgs": [
+    "--gpus",
+    "all"
+   ],
   "remoteUser": "vscode",
   "containerEnv": {
     "INSIGHTFACE_DATA_DIR": "/home/vscode/.insightface/server-data",

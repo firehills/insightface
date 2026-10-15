@@ -19,8 +19,11 @@ def estimate_norm(lmk, image_size=112,mode='arcface'):
         diff_x = 8.0*ratio
     dst = arcface_dst * ratio
     dst[:,0] += diff_x
-    tform = trans.SimilarityTransform()
-    tform.estimate(lmk, dst)
+    if hasattr(trans.SimilarityTransform, 'from_estimate'):
+        tform = trans.SimilarityTransform.from_estimate(lmk, dst)
+    else:
+        tform = trans.SimilarityTransform()
+        tform.estimate(lmk, dst)
     M = tform.params[0:2, :]
     return M
 
@@ -100,4 +103,3 @@ def trans_points(pts, M):
         return trans_points2d(pts, M)
     else:
         return trans_points3d(pts, M)
-

@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 
 from insightface.app import PersonAnalysis
+from insightface.utils import face_align
 
 
 def read_image(path):
@@ -35,6 +36,28 @@ def draw(frame, matches):
     return cv2.resize(output, None, fx=scale, fy=scale) if scale < 1 else output
 
 
+def save_aligned_faces(frame, observations, output_dir, frame_index):
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if not output_dir.is_dir():
+        raise ValueError('Aligned output path is not a directory: %s' % output_dir)
+    saved = []
+    for face_index, person in enumerate(observations):
+        face = person.face
+        if face is None or face.embedding is None:
+            continue
+        aligned = face_align.norm_crop(frame, landmark=face.kps, image_size=112)
+        output_path = output_dir / ('frame_%06d_face_%03d.bmp' % (frame_index, face_index))
+        encoded, data = cv2.imencode('.bmp', aligned)
+        if not encoded:
+            raise RuntimeError('Cannot encode aligned face as BMP: %s' % output_path)
+        try:
+            data.tofile(output_path)
+        except OSError as error:
+            raise OSError('Cannot write aligned face: %s' % output_path) from error
+        saved.append(output_path)
+    return saved
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     source = parser.add_mutually_exclusive_group(required=True)
@@ -49,6 +72,8 @@ def main():
     parser.add_argument('--no-update', action='store_true')
     parser.add_argument('--display', action='store_true')
     parser.add_argument('--max-frames', type=int, default=0, help='0 reads until EOF or stop')
+    parser.add_argument('--aligned-output-dir', type=Path,
+                        help='save each 112x112 face crop used for an embedding as BMP')
     args = parser.parse_args()
     if args.max_frames < 0 or args.camera is not None and args.camera < 0:
         parser.error('frame limit and camera index must be nonnegative')
@@ -80,6 +105,8 @@ def main():
                             raise RuntimeError('The input opened but did not return a readable frame')
                         break
                 observations = app.get(frame)
+                if args.aligned_output_dir is not None:
+                    save_aligned_faces(frame, observations, args.aligned_output_dir.expanduser(), index)
                 matches = app.match(observations)
                 changes = None if args.no_update else asdict(app.update(matches))
                 print(json.dumps({'frame': index, 'matches': [
