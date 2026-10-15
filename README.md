@@ -26,6 +26,9 @@ Use its Python API or try local videos, webcams, and RTSP streams in the desktop
 
 For installation and use, start with the [Python SDK and GUI documentation](python-package/README.md).
 
+For an isolated CPU development environment in VS Code, use the
+[development container](.devcontainer/README.md).
+
 ## InsightFace Server
 
 The new [InsightFace Server](server/) provides a simple self-hosted Web UI,
