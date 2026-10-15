@@ -152,12 +152,17 @@ def qt_plugin_root_candidates() -> list[Path]:
 def configure_qt_plugin_paths() -> None:
     """Point Qt at PySide6-Essentials plugins when the PySide6 meta package is absent."""
 
+    platform_plugin_path = os.environ.get("QT_QPA_PLATFORM_PLUGIN_PATH", "")
+    plugin_path = Path(platform_plugin_path)
+    opencv_plugin_path = (
+        plugin_path.parent.name == "qt" and plugin_path.parent.parent.name == "cv2"
+    )
     for plugins in qt_plugin_root_candidates():
         platforms = plugins / "platforms"
         if platforms.exists():
             if not os.environ.get("QT_PLUGIN_PATH"):
                 os.environ["QT_PLUGIN_PATH"] = str(plugins)
-            if not os.environ.get("QT_QPA_PLATFORM_PLUGIN_PATH"):
+            if not platform_plugin_path or opencv_plugin_path:
                 os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = str(platforms)
             return
 

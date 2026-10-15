@@ -150,3 +150,24 @@ def test_qt_plugin_paths_are_configured(monkeypatch):
 
     assert Path(os.environ["QT_PLUGIN_PATH"]).exists()
     assert Path(os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"]).exists()
+
+
+def test_qt_plugin_paths_replace_opencv_platform_plugins(monkeypatch):
+    from insightface.gui.app import configure_qt_plugin_paths
+
+    opencv_plugins = "/site-packages/cv2/qt/plugins"
+    monkeypatch.setenv("QT_QPA_PLATFORM_PLUGIN_PATH", opencv_plugins)
+    configure_qt_plugin_paths()
+
+    assert os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] != opencv_plugins
+    assert "PySide6" in os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"]
+
+
+def test_qt_plugin_paths_preserve_explicit_platform_plugins(monkeypatch, tmp_path):
+    from insightface.gui.app import configure_qt_plugin_paths
+
+    custom_plugins = tmp_path / "custom-qt" / "platforms"
+    monkeypatch.setenv("QT_QPA_PLATFORM_PLUGIN_PATH", str(custom_plugins))
+    configure_qt_plugin_paths()
+
+    assert os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] == str(custom_plugins)
