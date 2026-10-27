@@ -8,6 +8,7 @@
             "program": "${workspaceFolder}/examples/liveness_demo.py",
             "args": [
                 "--webcam",
+                "--mirror",
                 "--ctx",
                 "1",
                 "--debug"

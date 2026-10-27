@@ -49,7 +49,9 @@ or Chrome**, allow camera access, and click **Start camera**. The page shows the
 local camera alongside the annotated frames returned by WSL, with liveness,
 gender/age estimates, embedding availability, and input-rejection reasons.
 Click **Stop camera** to release the webcam; press **Ctrl+C** in WSL to stop the
-server. Use `--debug` for model and HTTP debug logs.
+server. Use `--debug` for model and HTTP debug logs. Add `--mirror` to flip the
+camera preview and processed frames horizontally, so moving right also moves
+right on screen.
 
 For GPU inference or a different port, for example:
 

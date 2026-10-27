@@ -5,6 +5,7 @@ Usage:
     python examples/liveness_demo.py input.jpg
     python examples/liveness_demo.py input.jpg --mode observe --threshold 0.9 --output out.jpg
     python examples/liveness_demo.py --webcam --ctx -1
+    python examples/liveness_demo.py --webcam --mirror --ctx -1
 
 For webcam mode, open http://localhost:8765 in a Windows browser. The browser
 captures the Windows camera; Python in WSL receives and annotates its frames.
@@ -45,6 +46,7 @@ def main():
       found and their input shapes and normalization values.
     * ``--webcam``: accept frames from a Windows browser instead of an image.
     * ``--port``: localhost HTTP port for webcam mode (default: 8765).
+    * ``--mirror``: flip webcam frames horizontally, like a mirror.
     """
     parser = argparse.ArgumentParser(description="InsightFace liveness demo")
     parser.add_argument(
@@ -58,6 +60,11 @@ def main():
         help="Serve a browser webcam client at http://localhost:8765",
     )
     parser.add_argument("--port", type=int, default=8765, help="Webcam server port (default: 8765)")
+    parser.add_argument(
+        "--mirror",
+        action="store_true",
+        help="Flip webcam frames horizontally so movement matches a mirror",
+    )
     parser.add_argument("--mode", choices=["normal", "observe"], default="normal",
                         help="normal blocks recognition for non-live/rejected faces; observe does not")
     parser.add_argument(
@@ -85,6 +92,8 @@ def main():
     args = parser.parse_args()
     if bool(args.image) == args.webcam:
         parser.error("Choose either an input image or --webcam, but not both.")
+    if args.mirror and not args.webcam:
+        parser.error("--mirror can only be used with --webcam.")
     if not 1 <= args.port <= 65535:
         parser.error("--port must be between 1 and 65535.")
 
@@ -110,7 +119,7 @@ def main():
     app.prepare(ctx_id=args.ctx, det_size=(640, 640))
 
     if args.webcam:
-        server = create_webcam_server(app, args.port)
+        server = create_webcam_server(app, args.port, mirror=args.mirror)
         print(f"Open http://localhost:{args.port} in Windows Edge or Chrome.", flush=True)
         print("Allow camera access, then click Start camera. Press Ctrl+C here to stop.", flush=True)
         try:
@@ -192,12 +201,14 @@ def annotate_faces(image, faces):
     return lines
 
 
-def create_webcam_server(app, port):
+def create_webcam_server(app, port, mirror=False):
     """Create a localhost-only receiver; the caller starts and closes the server.
 
     Args:
         app: Prepared FaceAnalysis instance, reused for all incoming frames.
         port: Local TCP port. Tests may use 0 to ask the OS for a free port.
+        mirror: Flip frames horizontally before inference and mirror the
+            browser preview.
 
     The page sends JPEG frames with a per-server token. Processing is serialized:
     a second in-flight frame gets HTTP 429 rather than queuing stale video.
@@ -205,7 +216,8 @@ def create_webcam_server(app, port):
     """
     token = secrets.token_urlsafe(32)
     page = Path(__file__).with_name("liveness_webcam.html").read_text(encoding="utf-8")
-    page = page.replace("__FRAME_TOKEN__", token).encode("utf-8")
+    page = page.replace("__FRAME_TOKEN__", token)
+    page = page.replace("__MIRROR__", "true" if mirror else "false").encode("utf-8")
     inference_lock = threading.Lock()
     logger = logging.getLogger("insightface.liveness_demo")
 
@@ -277,6 +289,10 @@ def create_webcam_server(app, port):
                 if max(image.shape[:2]) > 1920:
                     self.error(413, "Resize the frame to at most 1920 pixels on either edge.")
                     return
+                # Flip before inference so boxes match the mirrored image and
+                # annotation text remains readable.
+                if mirror:
+                    image = cv2.flip(image, 1)
                 started = time.perf_counter()
                 try:
                     faces = app.get(image)

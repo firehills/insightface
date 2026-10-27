@@ -9,12 +9,13 @@
     button { font: inherit; padding: 8px 16px; margin-right: 8px; }
     .views { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
     video, img { display: block; width: 100%; background: #222; aspect-ratio: 4 / 3; object-fit: contain; }
+    body[data-mirror="true"] video { transform: scaleX(-1); }
     #status { padding: 12px 0; }
     #results { white-space: pre-wrap; overflow-wrap: anywhere; }
     .note { color: #555; }
   </style>
 </head>
-<body>
+<body data-mirror="__MIRROR__">
   <h1>Webcam liveness, gender and age</h1>
   <p>Your Windows browser captures the camera. Python in WSL processes the frames.</p>
   <button id="start" type="button">Start camera</button>

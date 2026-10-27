@@ -69,6 +69,16 @@ class WebcamServerTests(unittest.TestCase):
         self.assertEqual(self.server.server_address[0], "127.0.0.1")
         self.assertIn(b"getUserMedia", self.page)
         self.assertNotIn(b"__FRAME_TOKEN__", self.page)
+        self.assertIn(b'data-mirror="false"', self.page)
+
+    def test_frames_are_not_mirrored_by_default(self):
+        image = np.zeros((16, 16, 3), dtype=np.uint8)
+        image[:, :8] = 255
+        _, jpeg = cv2.imencode(".jpg", image)
+        status, _ = self.frame(body=jpeg.tobytes())
+        self.assertEqual(status, 200)
+        received = self.app.get.call_args.args[0]
+        self.assertGreater(received[:, :8].mean(), received[:, 8:].mean())
 
     def test_frame_returns_jpeg_and_no_face_summary(self):
         status, body = self.frame()
@@ -168,6 +178,43 @@ class WebcamServerTests(unittest.TestCase):
             finally:
                 release.set()
             self.assertEqual(pending.result()[0], 200)
+
+
+class MirroredWebcamServerTests(unittest.TestCase):
+    def test_mirror_flips_frames_and_browser_preview(self):
+        app = Mock()
+        app.get.return_value = []
+        server = demo.create_webcam_server(app, 0, mirror=True)
+        thread = threading.Thread(target=server.serve_forever)
+        thread.start()
+        try:
+            connection = http.client.HTTPConnection(*server.server_address, timeout=10)
+            try:
+                connection.request("GET", "/")
+                page = connection.getresponse().read()
+            finally:
+                connection.close()
+            self.assertIn(b'data-mirror="true"', page)
+            token = re.search(rb'const token = "([^"]+)"', page).group(1).decode()
+
+            image = np.zeros((16, 16, 3), dtype=np.uint8)
+            image[:, :8] = 255
+            _, jpeg = cv2.imencode(".jpg", image)
+            connection = http.client.HTTPConnection(*server.server_address, timeout=10)
+            try:
+                connection.request("POST", "/frame", body=jpeg.tobytes(), headers={
+                    "Content-Type": "image/jpeg",
+                    "X-Frame-Token": token,
+                })
+                self.assertEqual(connection.getresponse().status, 200)
+            finally:
+                connection.close()
+            received = app.get.call_args.args[0]
+            self.assertGreater(received[:, 8:].mean(), received[:, :8].mean())
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
 
 
 if __name__ == "__main__":
