@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Liveness demo (webcam, CPU)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/liveness_demo.py",
+            "args": [
+                "--webcam",
+                "--ctx",
+                "1",
+                "--debug"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        }
+    ]
+}

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>InsightFace webcam liveness</title>
+  <style>
+    body { font: 16px system-ui, sans-serif; max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+    button { font: inherit; padding: 8px 16px; margin-right: 8px; }
+    .views { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+    video, img { display: block; width: 100%; background: #222; aspect-ratio: 4 / 3; object-fit: contain; }
+    #status { padding: 12px 0; }
+    #results { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .note { color: #555; }
+  </style>
+</head>
+<body>
+  <h1>Webcam liveness, gender and age</h1>
+  <p>Your Windows browser captures the camera. Python in WSL processes the frames.</p>
+  <button id="start" type="button">Start camera</button>
+  <button id="stop" type="button" disabled>Stop camera</button>
+  <div id="status" role="status" aria-live="polite">Ready. Allow camera access when prompted.</div>
+  <div class="views">
+    <section>
+      <h2>Windows camera</h2>
+      <video id="video" autoplay muted playsinline></video>
+    </section>
+    <section>
+      <h2>Processed in WSL</h2>
+      <img id="processed" alt="Annotated frames will appear here" hidden>
+    </section>
+  </div>
+  <pre id="results"></pre>
+  <p class="note">Green: live. Red: fake. Orange: insufficient image area around the face.
+    Scores, age and gender are model estimates, not guarantees. Use this local demo only
+    with people who consent. Frames are not saved by the demo.</p>
+  <canvas id="capture" hidden></canvas>
+  <script>
+    const token = "__FRAME_TOKEN__";
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("capture");
+    const processed = document.getElementById("processed");
+    const status = document.getElementById("status");
+    const results = document.getElementById("results");
+    const startButton = document.getElementById("start");
+    const stopButton = document.getElementById("stop");
+    let stream = null;
+    let controller = null;
+    // Each run owns an id so a stopped request cannot update a restarted camera.
+    let runId = 0;
+
+    function stopCamera() {
+      runId++;
+      if (controller) controller.abort();
+      if (stream) stream.getTracks().forEach(track => track.stop());
+      stream = null;
+      video.srcObject = null;
+      startButton.disabled = false;
+      stopButton.disabled = true;
+    }
+
+    async function sendFrames(id, signal) {
+      while (id === runId) {
+        const started = performance.now();
+        if (!video.videoWidth || !video.videoHeight) {
+          throw new Error("The camera did not provide a video frame.");
+        }
+        // Keep aspect ratio, reduce transfer cost, and cap the longest edge.
+        const scale = Math.min(1, 960 / Math.max(video.videoWidth, video.videoHeight));
+        canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+        canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+        canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.85));
+        if (id !== runId) return;
+        if (!blob) throw new Error("Could not encode the camera frame.");
+        const response = await fetch("/frame", {
+          method: "POST",
+          headers: { "Content-Type": "image/jpeg", "X-Frame-Token": token },
+          body: blob,
+          signal
+        });
+        const data = await response.json();
+        if (id !== runId) return;
+        // Aborting a fetch does not cancel inference already running in WSL.
+        // A quick Stop/Start can briefly find the receiver busy with that frame.
+        if (response.status === 429) {
+          status.textContent = "Waiting for the previous frame. Close other camera tabs if this persists.";
+          await new Promise(resolve => setTimeout(resolve, 250));
+          continue;
+        }
+        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+        processed.src = data.image;
+        processed.hidden = false;
+        results.textContent = data.results.join("\n") || "No faces detected.";
+        status.textContent = `${data.face_count} face(s), ${data.elapsed_ms} ms processing in WSL.`;
+        // Wait for this response before capturing again. This avoids a backlog
+        // on CPU inference, with a maximum target rate of five frames/second.
+        await new Promise(resolve => setTimeout(resolve, Math.max(0, 200 - (performance.now() - started))));
+      }
+    }
+
+    startButton.addEventListener("click", async () => {
+      const id = ++runId;
+      startButton.disabled = true;
+      stopButton.disabled = false;
+      processed.hidden = true;
+      results.textContent = "";
+      status.textContent = "Requesting camera access...";
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error("Camera access requires Windows Edge/Chrome at http://localhost:8765 (or your chosen localhost port).");
+        }
+        const camera = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false
+        });
+        if (id !== runId) {
+          camera.getTracks().forEach(track => track.stop());
+          return;
+        }
+        stream = camera;
+        video.srcObject = stream;
+        controller = new AbortController();
+        await video.play();
+        if (id !== runId) return;
+        status.textContent = "Processing camera frames in WSL...";
+        await sendFrames(id, controller.signal);
+      } catch (error) {
+        if (id === runId) {
+          stopCamera();
+          status.textContent = `Stopped: ${error.message}`;
+        }
+      }
+    });
+
+    stopButton.addEventListener("click", () => {
+      stopCamera();
+      status.textContent = "Camera stopped. The last processed result is still shown.";
+    });
+    window.addEventListener("pagehide", stopCamera);
+  </script>
+</body>
+</html>
